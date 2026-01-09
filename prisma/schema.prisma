@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  editor
+  viewer
+}
+
+enum MeetingStatus {
+  queued
+  processing
+  ready
+  error
+}
+
+enum MeetingPlatform {
+  meet
+  zoom
+  teams
+  presencial
+  upload
+}
+
+enum SummaryTemplate {
+  daily
+  one_on_one
+  sales
+  exec
+  custom
+}
+
+enum ExportFormat {
+  pdf
+  md
+  notion
+  slack
+  email
+}
+
+model Team {
+  id            String   @id @default(uuid())
+  name          String
+  plan          String
+  retentionDays Int      @default(365)
+  createdAt     DateTime @default(now())
+  users         User[]
+  meetings      Meeting[]
+  auditLogs     AuditLog[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  teamId       String
+  name         String
+  email        String   @unique
+  authProvider String
+  role         Role     @default(editor)
+  createdAt    DateTime @default(now())
+  team         Team     @relation(fields: [teamId], references: [id])
+  auditLogs    AuditLog[] @relation("ActorLogs")
+}
+
+model Meeting {
+  id             String          @id @default(uuid())
+  teamId         String
+  title          String
+  description    String?
+  platform       MeetingPlatform
+  language       String
+  status         MeetingStatus
+  startedAt      DateTime
+  durationSeconds Int
+  recordingUrl   String
+  createdAt      DateTime @default(now())
+  team           Team     @relation(fields: [teamId], references: [id])
+  participants   Participant[]
+  transcripts    Transcript[]
+  summaries      Summary[]
+  tasks          Task[]
+  decisions      Decision[]
+  exports        Export[]
+}
+
+model Participant {
+  id        String  @id @default(uuid())
+  meetingId String
+  name      String
+  role      String
+  email     String?
+  source    String
+  meeting   Meeting @relation(fields: [meetingId], references: [id])
+}
+
+model Transcript {
+  id           String   @id @default(uuid())
+  meetingId    String
+  language     String
+  diarization  Json
+  words        Json
+  createdAt    DateTime @default(now())
+  meeting      Meeting  @relation(fields: [meetingId], references: [id])
+}
+
+model Summary {
+  id        String          @id @default(uuid())
+  meetingId String
+  template  SummaryTemplate
+  summary   Json
+  createdAt DateTime @default(now())
+  meeting   Meeting @relation(fields: [meetingId], references: [id])
+}
+
+model Task {
+  id        String   @id @default(uuid())
+  meetingId String
+  title     String
+  owner     String
+  dueDate   DateTime?
+  status    String
+  meeting   Meeting @relation(fields: [meetingId], references: [id])
+}
+
+model Decision {
+  id        String   @id @default(uuid())
+  meetingId String
+  decision  String
+  createdAt DateTime @default(now())
+  meeting   Meeting @relation(fields: [meetingId], references: [id])
+}
+
+model Export {
+  id        String       @id @default(uuid())
+  meetingId String
+  format    ExportFormat
+  status    String
+  url       String
+  createdAt DateTime @default(now())
+  meeting   Meeting @relation(fields: [meetingId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  teamId    String
+  actorId   String
+  action    String
+  metadata  Json
+  createdAt DateTime @default(now())
+  team      Team     @relation(fields: [teamId], references: [id])
+  actor     User     @relation("ActorLogs", fields: [actorId], references: [id])
+}
