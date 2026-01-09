@@ -1,18 +1,36 @@
-# tl;dv Codex
+# tl;dv Backend
 
-SaaS para gravação, transcrição e resumo inteligente de reuniões, inspirado no tl;dv.
+Backend SaaS para gravação, transcrição e resumo inteligente de reuniões.
 
-## Começando
+## Requisitos
+- Node.js 20+
+- PostgreSQL
+- Redis
+- Storage S3 compatível (MinIO, AWS S3, Supabase Storage)
+
+## Configuração
 ```bash
+cp .env.example .env
 npm install
+```
+
+## Migrations
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+## Rodar API
+```bash
 npm run dev
 ```
 
-## Conteúdo entregue
-- Especificação funcional completa em `docs/functional-spec.md`.
-- User stories e critérios de aceite em `docs/user-stories.md`.
-- Arquitetura e diagrama textual em `docs/architecture.md`.
-- Modelo de dados em `docs/data-model.md` e `prisma/schema.prisma`.
-- Wireframes textuais em `docs/wireframes.md`.
-- Prompts de IA em `docs/ai-prompts.md`.
-- Instruções de deploy em `docs/deploy.md`.
+## Rodar Worker
+```bash
+npm run build
+npm run start:worker
+```
+
+## Documentação
+- Swagger: `http://localhost:3001/docs`
+- Health check: `http://localhost:3001/health`

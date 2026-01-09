@@ -7,111 +7,113 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
+enum TeamRole {
+  owner
   admin
-  editor
+  member
   viewer
 }
 
 enum MeetingStatus {
-  queued
-  processing
+  received
+  audio_extracted
+  transcribed
+  summarized
+  tasks_extracted
   ready
-  error
-}
-
-enum MeetingPlatform {
-  meet
-  zoom
-  teams
-  presencial
-  upload
+  failed
 }
 
 enum SummaryTemplate {
   daily
   one_on_one
   sales
-  exec
+  executive
   custom
 }
 
-enum ExportFormat {
-  pdf
-  md
-  notion
-  slack
-  email
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  memberships TeamMember[]
+  auditLogs   AuditLog[]
+  refreshTokens RefreshToken[]
 }
 
 model Team {
-  id            String   @id @default(uuid())
-  name          String
-  plan          String
-  retentionDays Int      @default(365)
-  createdAt     DateTime @default(now())
-  users         User[]
-  meetings      Meeting[]
-  auditLogs     AuditLog[]
+  id           String   @id @default(uuid())
+  name         String
+  retentionDays Int     @default(365)
+  createdAt    DateTime @default(now())
+  members      TeamMember[]
+  meetings     Meeting[]
+  auditLogs    AuditLog[]
+  integrations IntegrationConfig[]
 }
 
-model User {
-  id           String   @id @default(uuid())
-  teamId       String
-  name         String
-  email        String   @unique
-  authProvider String
-  role         Role     @default(editor)
-  createdAt    DateTime @default(now())
-  team         Team     @relation(fields: [teamId], references: [id])
-  auditLogs    AuditLog[] @relation("ActorLogs")
+model TeamMember {
+  teamId String
+  userId String
+  role   TeamRole
+  createdAt DateTime @default(now())
+  team   Team @relation(fields: [teamId], references: [id])
+  user   User @relation(fields: [userId], references: [id])
+
+  @@id([teamId, userId])
 }
 
 model Meeting {
-  id             String          @id @default(uuid())
-  teamId         String
-  title          String
-  description    String?
-  platform       MeetingPlatform
-  language       String
-  status         MeetingStatus
-  startedAt      DateTime
-  durationSeconds Int
-  recordingUrl   String
-  createdAt      DateTime @default(now())
-  team           Team     @relation(fields: [teamId], references: [id])
-  participants   Participant[]
-  transcripts    Transcript[]
-  summaries      Summary[]
-  tasks          Task[]
-  decisions      Decision[]
-  exports        Export[]
+  id          String         @id @default(uuid())
+  teamId      String
+  title       String
+  startedAt   DateTime?
+  endedAt     DateTime?
+  status      MeetingStatus @default(received)
+  language    String
+  template    SummaryTemplate
+  tags        String[]       @default([])
+  participants String[]      @default([])
+  consentRecordedAt DateTime?
+  consentTextVersion String?
+  createdAt   DateTime @default(now())
+  deletedAt   DateTime?
+  team        Team @relation(fields: [teamId], references: [id])
+  mediaAssets MediaAsset[]
+  transcript  Transcript?
+  summaries   SummaryVersion[]
+  tasks       Task[]
+  decisions   Decision[]
 }
 
-model Participant {
-  id        String  @id @default(uuid())
-  meetingId String
-  name      String
-  role      String
-  email     String?
-  source    String
-  meeting   Meeting @relation(fields: [meetingId], references: [id])
+model MediaAsset {
+  id          String   @id @default(uuid())
+  meetingId   String
+  storageKey  String
+  mime        String
+  durationMs  Int?
+  sizeBytes   Int
+  createdAt   DateTime @default(now())
+  meeting     Meeting @relation(fields: [meetingId], references: [id])
 }
 
 model Transcript {
-  id           String   @id @default(uuid())
-  meetingId    String
-  language     String
-  diarization  Json
-  words        Json
-  createdAt    DateTime @default(now())
-  meeting      Meeting  @relation(fields: [meetingId], references: [id])
+  id         String   @id @default(uuid())
+  meetingId  String   @unique
+  fullText   String
+  segments   Json
+  language   String
+  createdAt  DateTime @default(now())
+  meeting    Meeting @relation(fields: [meetingId], references: [id])
 }
 
-model Summary {
-  id        String          @id @default(uuid())
+model SummaryVersion {
+  id        String   @id @default(uuid())
   meetingId String
+  version   Int
   template  SummaryTemplate
+  model     String
   summary   Json
   createdAt DateTime @default(now())
   meeting   Meeting @relation(fields: [meetingId], references: [id])
@@ -120,38 +122,56 @@ model Summary {
 model Task {
   id        String   @id @default(uuid())
   meetingId String
-  title     String
-  owner     String
+  text      String
+  owner     String?
   dueDate   DateTime?
-  status    String
+  status    String @default("open")
   meeting   Meeting @relation(fields: [meetingId], references: [id])
 }
 
 model Decision {
   id        String   @id @default(uuid())
   meetingId String
-  decision  String
-  createdAt DateTime @default(now())
-  meeting   Meeting @relation(fields: [meetingId], references: [id])
-}
-
-model Export {
-  id        String       @id @default(uuid())
-  meetingId String
-  format    ExportFormat
-  status    String
-  url       String
-  createdAt DateTime @default(now())
+  text      String
+  owner     String?
   meeting   Meeting @relation(fields: [meetingId], references: [id])
 }
 
 model AuditLog {
   id        String   @id @default(uuid())
   teamId    String
-  actorId   String
+  userId    String
   action    String
   metadata  Json
   createdAt DateTime @default(now())
-  team      Team     @relation(fields: [teamId], references: [id])
-  actor     User     @relation("ActorLogs", fields: [actorId], references: [id])
+  team      Team @relation(fields: [teamId], references: [id])
+  user      User @relation(fields: [userId], references: [id])
+}
+
+model IntegrationConfig {
+  id        String   @id @default(uuid())
+  teamId    String
+  type      String
+  settings  Json
+  createdAt DateTime @default(now())
+  team      Team @relation(fields: [teamId], references: [id])
+
+  @@unique([teamId, type])
+}
+
+model MagicLink {
+  id        String   @id @default(uuid())
+  email     String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id])
 }
